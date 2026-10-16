@@ -167,23 +167,23 @@ elif page == "👤 Member Panel (Live Bidding)":
                         ⏳ Time Remaining: Calculating...
                     </div>
                     <script>
-                        var countDownDate = {{int(end_time * 1000)}};
-                        var x = setInterval(function() {{{{
+                        var countDownDate = {int(end_time * 1000)};
+                        var x = setInterval(function() {{
                             var now = new Date().getTime();
                             var distance = countDownDate - now;
-                            if (distance <= 0) {{{{
+                            if (distance <= 0) {{
                                 clearInterval(x);
                                 document.getElementById("clock").innerHTML = "⏳ Time is Up! Please click 'Refresh Timer & Bids' button below.";
                                 document.getElementById("clock").style.backgroundColor = "#f8d7da";
                                 document.getElementById("clock").style.color = "#721c24";
-                            }}}} else {{{{
+                            }} else {{
                                 var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                                 var seconds = Math.floor((distance % (1000 * 60)) / 1000);
                                 document.getElementById("clock").innerHTML = "⏳ Time Remaining: " + ("0" + minutes).slice(-2) + ":" + ("0" + seconds).slice(-2);
-                            }}}}
-                        }}}}, 1000);
+                            }}
+                        }}, 1000);
                     </script>
-                    """
+                    """                    
                     components.html(timer_html, height=65)
                     # ----------------------------
                     
