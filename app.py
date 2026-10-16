@@ -245,9 +245,24 @@ elif page == "👤 Member Dashboard":
                 new_bid = st.number_input("Your Bid (₹)", min_value=next_bid, step=500)
                 
                 if st.button("Submit Bid", use_container_width=True):
-                    if time.time() < end_time:
-                        db.reference('current_committee').update({'highest_bid': new_bid, 'highest_bidder': st.session_state.user_name, 'end_time': end_time + 60})
-                        st.success("Bid Placed! Time Extended.")
+                    actual_time = time.time()
+                    if actual_time < end_time:
+                        remaining_time = end_time - actual_time
+                        
+                        # Fix: Sirf tabhi 60 seconds jodein jab time 1 minute se kam bacha ho
+                        if remaining_time <= 60:
+                            new_end_time = end_time + 60
+                            success_msg = "Bid Placed! Time Extended by 1 minute."
+                        else:
+                            new_end_time = end_time
+                            success_msg = "Bid Placed Successfully!"
+                            
+                        db.reference('current_committee').update({
+                            'highest_bid': new_bid, 
+                            'highest_bidder': st.session_state.user_name, 
+                            'end_time': new_end_time
+                        })
+                        st.success(success_msg)
                         st.rerun()
                 if st.button("🔄 Refresh", use_container_width=True): st.rerun()
                     
