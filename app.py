@@ -7,8 +7,17 @@ import time
 from datetime import datetime
 import urllib.parse
 
-# Page Configuration
-st.set_page_config(page_title="Live Committee App", page_icon="💸", layout="wide")
+# Page Configuration for Mobile-like feel
+st.set_page_config(page_title="Live Committee App", page_icon="💸", layout="centered")
+
+# Custom CSS for Mobile App Look
+st.markdown("""
+<style>
+    .metric-card {background-color: #f8f9fa; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); text-align: center; margin-bottom: 10px;}
+    .member-card {background-color: #ffffff; padding: 10px 15px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;}
+    .winner-card {background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 10px; border: 1px solid #ffeeba; text-align: center; margin-bottom: 20px;}
+</style>
+""", unsafe_allow_html=True)
 
 # ----------------- FIREBASE CONNECTION -----------------
 if not firebase_admin._apps:
@@ -22,59 +31,54 @@ if not firebase_admin._apps:
         st.error(f"❌ Firebase Error: {e}")
 # -------------------------------------------------------
 
-# App URL for Invites (Aapki app ka link)
 APP_URL = "https://live-committee-app-tsnnxncqfoz34he6srtvvc.streamlit.app"
 
 # ==========================================
 #      INVITATION & REGISTRATION PAGE
 # ==========================================
-# Check if user is coming from an invite link
 query_params = st.query_params
 if "invite" in query_params:
     invite_mobile = query_params["invite"]
     
-    st.title("🤝 Welcome to Live Committee!")
-    st.subheader("Aapko is committee mein shamil hone ke liye invite kiya gaya hai.")
-    st.divider()
+    st.title("🤝 Join Live Committee")
     
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.info("""
-        📜 **Committee Terms & Conditions (Niyam v Shartein):**
-        1. **Samay Par Payment:** Bidding jeetne wale member ko aur baaki sabhi members ko tay samay (2-3 din) ke andar payment karni anivarya hai.
-        2. **Live Bidding:** Bidding ka samay fix rahega aur app par live chalega.
-        3. **Time Extension:** Bidding khatam hone ke aakhiri 1 minute mein agar koi nayi bid aati hai, toh time automatically 1 minute badh jayega.
-        4. **Platform Fee:** App platform ki ek choti si maintenance fee (Admin dwara tay) EMI ke saath jod li jayegi.
-        5. **Final Decision:** Kisi bhi vivad ki sthiti mein Admin ka faisla aakhiri aur sarvamanya hoga.
-        """)
-        
-        agree = st.checkbox("☑️ Main upar di gayi sabhi shartein padh li hain aur mujhe manzoor hain (I Accept)")
-        
-        if agree:
-            with st.form("invite_join_form"):
-                st.text_input("Your Mobile Number (Login ID)", value=invite_mobile, disabled=True)
-                new_name = st.text_input("Enter Your Full Name")
-                new_pass = st.text_input("Create a Password", type="password")
-                submit_join = st.form_submit_button("✅ Accept & Join Committee")
-                
-                if submit_join:
-                    if new_name and new_pass:
-                        # User ko database mein save karein
-                        db.reference(f'users/{invite_mobile}').set({
-                            'name': new_name,
-                            'password': new_pass
-                        })
-                        st.success("🎉 Badhai ho! Aap successfully register ho gaye hain.")
-                        st.markdown(f"**[👉 Click Here to Login]({APP_URL})**")
-                    else:
-                        st.error("Kripya apna naam aur password dalein.")
-    st.stop() # Is line se baaki ki app hide ho jayegi jab tak invite page khula hai
+    # Fetch upcoming details to show to the invitee
+    try:
+        upcoming = db.reference('upcoming_settings').get()
+        contrib = upcoming.get('contribution', 0) if upcoming else 0
+        target_m = upcoming.get('target_members', 0) if upcoming else 0
+        if contrib > 0:
+            st.success(f"💎 **Contribution:** ₹{contrib} per member | 👥 **Target Members:** {target_m}")
+    except:
+        pass
+
+    st.info("""
+    📜 **Committee Rules:**
+    1. Payment must be done within 2 days of bidding.
+    2. Bidding is live. Last 1-minute bids will extend the timer by 60 seconds.
+    3. Admin's decision is final.
+    """)
+    
+    agree = st.checkbox("☑️ I Accept the Rules")
+    if agree:
+        with st.form("invite_join_form"):
+            st.text_input("Mobile Number (ID)", value=invite_mobile, disabled=True)
+            new_name = st.text_input("Enter Full Name")
+            new_pass = st.text_input("Create Password", type="password")
+            submit_join = st.form_submit_button("✅ Accept & Join")
+            
+            if submit_join:
+                if new_name and new_pass:
+                    db.reference(f'users/{invite_mobile}').set({'name': new_name, 'password': new_pass})
+                    st.success("🎉 Registration Successful!")
+                    st.markdown(f"**[👉 Click Here to Login]({APP_URL})**")
+                else:
+                    st.error("Please fill all details.")
+    st.stop()
 
 # ==========================================
 #              NORMAL APP LOGIC
 # ==========================================
-
-# Session State for Login Tracking
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'user_name' not in st.session_state:
@@ -82,284 +86,228 @@ if 'user_name' not in st.session_state:
 if 'mobile' not in st.session_state:
     st.session_state.mobile = ""
 
-st.title("💸 Live Committee & Bidding Platform")
+st.title("💸 Live Committee")
 
-# Sidebar navigation
-page = st.sidebar.radio("Navigation", ["👤 Member Panel (Live Bidding)", "🛠️ Admin Panel", "📜 History & Records"])
+page = st.sidebar.radio("Menu", ["👤 Member Dashboard", "🛠️ Admin Panel", "📜 History"])
 
 # ------------------- ADMIN PANEL -------------------
 if page == "🛠️ Admin Panel":
     admin_pass = st.sidebar.text_input("Admin Passcode", type="password")
     
     if admin_pass == "admin123":
-        st.header("🛠️ Admin Dashboard")
+        tab1, tab2 = st.tabs(["👥 1. Pre-Setup & Invites", "🚀 2. Start Bidding"])
         
-        tab1, tab2 = st.tabs(["🚀 Start & Manage Committee", "👥 Invite & Manage Members"])
-        
-        # TAB 1: START OR ARCHIVE COMMITTEE
+        # TAB 1: SETUP & INVITES
         with tab1:
+            st.subheader("Step 1: Set Target for Upcoming Committee")
+            with st.form("upcoming_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    target_m = st.number_input("Target Members", min_value=2, value=10)
+                with col2:
+                    contrib = st.number_input("EMI/Contribution (₹)", min_value=1000, value=5000, step=500)
+                if st.form_submit_button("Save Target"):
+                    db.reference('upcoming_settings').set({'target_members': target_m, 'contribution': contrib})
+                    st.success("Target Saved! Now send invites.")
+            
+            st.divider()
+            st.subheader("Step 2: Invite Members")
+            invite_mob = st.text_input("Mobile Number (without +91)")
+            if st.button("Generate WhatsApp Invite"):
+                if invite_mob and len(invite_mob) == 10:
+                    invite_link = f"{APP_URL}/?invite={invite_mob}"
+                    msg_text = f"Hello! 🤝 Maine tumhe apni Live Committee mein add kiya hai.\n\n🔗 Is link par click karke details check karo aur Join karo:\n{invite_link}"
+                    wa_link = f"https://wa.me/91{invite_mob}?text={urllib.parse.quote(msg_text)}"
+                    st.markdown(f'<a href="{wa_link}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;font-weight:bold;">💬 Send Invite</a>', unsafe_allow_html=True)
+                else:
+                    st.warning("Enter valid 10-digit number.")
+                    
+        # TAB 2: START COMMITTEE
+        with tab2:
             try:
                 current_data = db.reference('current_committee').get()
                 if current_data and current_data.get('status') == 'Completed':
-                    st.success("🎉 Pichli Committee safaltapurvak poori ho chuki hai!")
-                    st.warning("⚠️ Nayi committee shuru karne se pehle purani ko History mein save karein.")
-                    
-                    if st.button("📁 Archive & Reset Committee"):
+                    if st.button("📁 Archive Old Committee"):
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         T = current_data['total_pool']
                         B = current_data['highest_bid']
                         M = current_data['total_members']
                         F = current_data['app_fee']
-                        
                         db.reference('history').push({
-                            'date': timestamp,
-                            'total_pool': T,
-                            'highest_bid': B,
+                            'date': timestamp, 'total_pool': T, 'highest_bid': B,
                             'highest_bidder': current_data['highest_bidder'],
-                            'emi': ((T - B) / M) + F,
-                            'admin_fee': F * M,
-                            'winner_received': T - B
+                            'emi': ((T - B) / M) + F, 'admin_fee': F * M, 'winner_received': T - B
                         })
                         db.reference('current_committee').delete()
-                        st.success("✅ Committee Archived! Ab aap nayi boli shuru kar sakte hain.")
+                        st.success("Archived! Ready for new bidding.")
                         st.rerun()
-            except Exception as e:
-                pass
+            except: pass
 
-            st.divider()
-            st.subheader("Setup New Committee")
-            
-            # Database se automatically members ginna
             try:
-                all_users = db.reference('users').get()
-                actual_member_count = len(all_users) if all_users else 0
+                all_users = db.reference('users').get() or {}
+                actual_member_count = len(all_users)
+                upcoming = db.reference('upcoming_settings').get() or {}
+                contrib = upcoming.get('contribution', 5000)
             except:
                 actual_member_count = 0
+                contrib = 5000
                 
-            st.info(f"👥 **Total Registered Members: {actual_member_count}** (App apne aap inhi members ke hisaab se pool banayegi)")
+            st.info(f"👥 **Ready Members: {actual_member_count}** | 💸 **Contribution: ₹{contrib}**")
 
             with st.form("setup_committee"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    contribution_per_member = st.number_input("Contribution Per Member (Ek member ki kisht - ₹)", min_value=1000, value=10000, step=500)
-                with col2:
-                    min_bid = st.number_input("Minimum Bid (₹)", min_value=0, value=1000, step=500)
-                    app_fee = st.number_input("Platform Fee Per Member (₹)", min_value=0, value=50)
-                    
-                timer_minutes = st.number_input("Timer Duration (Minutes)", min_value=1, value=15)
-                submit_setup = st.form_submit_button("Start Committee & Open Bidding")
+                c1, c2 = st.columns(2)
+                with c1:
+                    min_bid = st.number_input("Minimum Bid (₹)", value=1000, step=500)
+                with c2:
+                    app_fee = st.number_input("Platform Fee/Member (₹)", value=50)
+                timer_minutes = st.number_input("Timer (Minutes)", min_value=1, value=15)
                 
-                if submit_setup:
+                if st.form_submit_button("🚀 Start Live Bidding"):
                     if actual_member_count < 2:
-                        st.error("❌ Committee shuru karne ke liye kam se kam 2 members ko pehle register karein!")
+                        st.error("Need at least 2 members!")
                     else:
-                        auto_total_pool = contribution_per_member * actual_member_count
-                        end_timestamp = time.time() + (timer_minutes * 60)
-                        
                         db.reference('current_committee').set({
-                            'total_pool': auto_total_pool,
+                            'total_pool': contrib * actual_member_count,
                             'total_members': actual_member_count,
-                            'min_bid': min_bid,
-                            'app_fee': app_fee,
-                            'highest_bid': 0,
-                            'highest_bidder': "No one yet",
-                            'status': "Active",
-                            'end_time': end_timestamp
+                            'min_bid': min_bid, 'app_fee': app_fee,
+                            'highest_bid': 0, 'highest_bidder': "No one yet",
+                            'status': "Active", 'end_time': time.time() + (timer_minutes * 60)
                         })
-                        st.success(f"✅ Committee Started! Total Pool ₹ {auto_total_pool} set ho gaya hai.")
-
-        # TAB 2: INVITE MEMBERS (WHATSAPP)
-        with tab2:
-            st.subheader("📲 Invite Member via WhatsApp")
-            st.write("Member ka mobile number daalein aur link bhejein. Woh khud apni details bharkar join karenge.")
-            
-            invite_mob = st.text_input("Mobile Number (Bina +91 ke)")
-            if st.button("Generate WhatsApp Invite"):
-                if invite_mob and len(invite_mob) == 10:
-                    invite_link = f"{APP_URL}/?invite={invite_mob}"
-                    msg_text = f"Hello! 🤝 Aapko ek nayi Live Committee mein invite kiya gaya hai.\n\n🔗 Is link par click karein, T&C accept karein aur join karein:\n{invite_link}"
-                    safe_msg = urllib.parse.quote(msg_text)
-                    wa_link = f"https://wa.me/91{invite_mob}?text={safe_msg}"
-                    
-                    st.markdown(f"""
-                    <a href="{wa_link}" target="_blank" style="background-color:#25D366;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;margin-top:10px;">
-                        💬 Send Invite on WhatsApp
-                    </a>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.warning("Kripya sahi 10-digit ka mobile number daalein.")
-            
-            st.divider()
-            st.subheader("📋 Registered Members")
-            try:
-                all_users = db.reference('users').get()
-                if all_users:
-                    for mob, details in all_users.items():
-                        st.write(f"👤 **{details.get('name', 'Unknown')}** (Login ID: {mob})")
-                else:
-                    st.info("Abhi tak koi member add nahi hua hai.")
-            except Exception:
-                pass
+                        st.success("Bidding Started!")
     else:
-        st.warning("🔒 Kripya Admin Panel access karne ke liye sahi Admin Passcode dalein. (Default: admin123)")
+        st.warning("Enter Admin Passcode")
 
 # ------------------- MEMBER PANEL -------------------
-elif page == "👤 Member Panel (Live Bidding)":
+elif page == "👤 Member Dashboard":
     if not st.session_state.logged_in:
-        st.header("🔐 Member Login")
+        st.header("🔐 Login")
         mobile_input = st.text_input("Mobile Number")
         pass_input = st.text_input("Password", type="password")
-        
         if st.button("Login"):
-            if mobile_input and pass_input:
-                user_data = db.reference(f'users/{mobile_input}').get()
-                if user_data and user_data.get('password') == pass_input:
-                    st.session_state.logged_in = True
-                    st.session_state.user_name = user_data.get('name')
-                    st.session_state.mobile = mobile_input
-                    st.success(f"Welcome {st.session_state.user_name}!")
-                    st.rerun()
-                else:
-                    st.error("❌ Galat Mobile Number ya Password.")
-            else:
-                st.warning("Kripya Mobile aur Password dalein.")
-    else:
-        colA, colB = st.columns([4, 1])
-        with colA:
-            st.header(f"👤 Welcome, {st.session_state.user_name}!")
-        with colB:
-            if st.button("Logout"):
-                st.session_state.logged_in = False
-                st.session_state.user_name = ""
-                st.session_state.mobile = ""
+            user_data = db.reference(f'users/{mobile_input}').get()
+            if user_data and user_data.get('password') == pass_input:
+                st.session_state.logged_in = True
+                st.session_state.user_name = user_data.get('name')
+                st.session_state.mobile = mobile_input
                 st.rerun()
-                
-        st.divider()
-        try:
-            committee_data = db.reference('current_committee').get()
-            
-            if committee_data:
-                current_time = time.time()
-                end_time = committee_data.get('end_time', 0)
-                status = committee_data.get('status', 'Closed')
-                remaining_seconds = int(end_time - current_time)
-                
-                if status == "Active" and remaining_seconds <= 0:
-                    db.reference('current_committee').update({'status': 'Completed'})
-                    st.rerun()
-
-                if status == "Active":
-                    # Dynamic Timer Code with Red Alert Logic
-                    timer_html = f"""
-                    <div id="clock" style="background-color: #ffefc2; color: #856404; padding: 12px; border-radius: 8px; border: 1px solid #ffeeba; font-size: 18px; font-weight: bold; font-family: sans-serif; text-align: center; margin-bottom: 10px; transition: 0.5s;">
-                        ⏳ Time Remaining: Calculating...
-                    </div>
-                    <script>
-                        var countDownDate = {int(end_time * 1000)};
-                        var x = setInterval(function() {{
-                            var now = new Date().getTime();
-                            var distance = countDownDate - now;
-                            if (distance <= 0) {{
-                                clearInterval(x);
-                                document.getElementById("clock").innerHTML = "⏳ Time is Up! Please click 'Refresh Timer & Bids' button below.";
-                                document.getElementById("clock").style.backgroundColor = "#f8d7da";
-                                document.getElementById("clock").style.color = "#721c24";
-                                document.getElementById("clock").style.border = "1px solid #f5c6cb";
-                            }} else {{
-                                var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                                var seconds = Math.floor((distance % (1000 * 60)) / 1000);
-                                document.getElementById("clock").innerHTML = "⏳ Time Remaining: " + ("0" + minutes).slice(-2) + ":" + ("0" + seconds).slice(-2);
-                                
-                                if (distance <= 60000) {{
-                                    document.getElementById("clock").style.backgroundColor = "#ffcccc";
-                                    document.getElementById("clock").style.color = "#cc0000";
-                                    document.getElementById("clock").style.border = "2px solid #cc0000";
-                                }} else {{
-                                    document.getElementById("clock").style.backgroundColor = "#ffefc2";
-                                    document.getElementById("clock").style.color = "#856404";
-                                    document.getElementById("clock").style.border = "1px solid #ffeeba";
-                                }}
-                            }}
-                        }}, 1000);
-                    </script>
-                    """
-                    components.html(timer_html, height=65)
-                    
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("💰 Total Pool", f"₹ {committee_data['total_pool']}")
-                    col2.metric("📈 Current Highest Bid", f"₹ {committee_data['highest_bid']}")
-                    col3.metric("👑 Highest Bidder", committee_data['highest_bidder'])
-                    
-                    st.divider()
-                    st.subheader("Place Your Bid")
-                    
-                    next_min_bid = committee_data['highest_bid'] + 500
-                    if committee_data['highest_bid'] == 0:
-                        next_min_bid = committee_data['min_bid']
-                        
-                    new_bid = st.number_input("Enter Bid Amount (₹)", min_value=next_min_bid, step=500)
-                    
-                    if st.button("Submit Bid"):
-                        actual_time = time.time()
-                        if actual_time > end_time:
-                            st.error("⏳ Time is up! You cannot place a bid anymore.")
-                        else:
-                            # Dynamic Extension: Har bid par 1 minute (60 seconds) jod diya jayega
-                            new_end_time = end_time + 60
-                                
-                            db.reference('current_committee').update({
-                                'highest_bid': new_bid,
-                                'highest_bidder': st.session_state.user_name,
-                                'end_time': new_end_time
-                            })
-                            st.success("✅ Bid placed successfully! Time Extended.")
-                            st.rerun()
-                            
-                    if st.button("🔄 Refresh Timer & Bids"):
-                        st.rerun()
-                        
-                elif status == "Completed":
-                    st.success("🎉 **Bidding has Ended!** 🎉")
-                    T = committee_data['total_pool']
-                    B = committee_data['highest_bid']
-                    M = committee_data['total_members']
-                    F = committee_data['app_fee']
-                    Winner = committee_data['highest_bidder']
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.info(f"🏆 **Winner:** {Winner}")
-                        st.info(f"💵 **Winner Receives:** ₹ {T - B:,.2f}")
-                    with col2:
-                        st.error(f"💸 **EMI (Per Member):** ₹ {((T - B) / M) + F:,.2f}")
-                        st.warning(f"🛠️ **Admin/Platform Fee Collected:** ₹ {F * M:,.2f}")
             else:
-                st.info("⏳ Abhi koi Committee chalu nahi hai. Kripya Admin ka intezar karein.")
-        except Exception as e:
-            st.warning(f"Database Error: {e}")
+                st.error("Wrong details.")
+    else:
+        c1, c2 = st.columns([3, 1])
+        c1.subheader(f"👋 Hi, {st.session_state.user_name}")
+        if c2.button("Logout"):
+            st.session_state.logged_in = False
+            st.rerun()
+            
+        st.divider()
+        committee_data = db.reference('current_committee').get()
+        
+        # --- ACTIVE/COMPLETED BIDDING VIEW ---
+        if committee_data and committee_data.get('status') in ["Active", "Completed"]:
+            status = committee_data.get('status')
+            end_time = committee_data.get('end_time', 0)
+            
+            if status == "Active" and int(end_time - time.time()) <= 0:
+                db.reference('current_committee').update({'status': 'Completed'})
+                st.rerun()
+
+            if status == "Active":
+                timer_html = f"""
+                <div id="clock" style="background-color: #ffefc2; color: #856404; padding: 12px; border-radius: 8px; border: 1px solid #ffeeba; font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 10px; transition: 0.5s;">
+                    ⏳ Calculating...
+                </div>
+                <script>
+                    var cDate = {int(end_time * 1000)};
+                    var x = setInterval(function() {{
+                        var dist = cDate - new Date().getTime();
+                        if (dist <= 0) {{
+                            clearInterval(x);
+                            document.getElementById("clock").innerHTML = "⏳ Time is Up! Refresh bids.";
+                            document.getElementById("clock").style.backgroundColor = "#f8d7da";
+                            document.getElementById("clock").style.color = "#721c24";
+                        }} else {{
+                            var m = Math.floor((dist % (1000 * 60 * 60)) / (1000 * 60));
+                            var s = Math.floor((dist % (1000 * 60)) / 1000);
+                            document.getElementById("clock").innerHTML = "⏳ Remaining: " + ("0"+m).slice(-2) + ":" + ("0"+s).slice(-2);
+                            if(dist <= 60000) {{ document.getElementById("clock").style.backgroundColor = "#ffcccc"; document.getElementById("clock").style.color = "#cc0000"; }}
+                            else {{ document.getElementById("clock").style.backgroundColor = "#ffefc2"; document.getElementById("clock").style.color = "#856404"; }}
+                        }}
+                    }}, 1000);
+                </script>
+                """
+                components.html(timer_html, height=65)
+                
+                c1, c2 = st.columns(2)
+                c1.metric("💰 Total Pool", f"₹{committee_data['total_pool']}")
+                c2.metric("📈 Highest Bid", f"₹{committee_data['highest_bid']} ({committee_data['highest_bidder']})")
+                
+                next_bid = committee_data['highest_bid'] + 500 if committee_data['highest_bid'] > 0 else committee_data['min_bid']
+                new_bid = st.number_input("Your Bid (₹)", min_value=next_bid, step=500)
+                
+                if st.button("Submit Bid", use_container_width=True):
+                    if time.time() < end_time:
+                        db.reference('current_committee').update({'highest_bid': new_bid, 'highest_bidder': st.session_state.user_name, 'end_time': end_time + 60})
+                        st.success("Bid Placed! Time Extended.")
+                        st.rerun()
+                if st.button("🔄 Refresh", use_container_width=True): st.rerun()
+                    
+            elif status == "Completed":
+                st.success("🎉 Bidding Ended!")
+                T, B, M, F = committee_data['total_pool'], committee_data['highest_bid'], committee_data['total_members'], committee_data['app_fee']
+                st.markdown(f"<div class='winner-card'>🏆 <b>Winner:</b> {committee_data['highest_bidder']}<br>💵 <b>Receives:</b> ₹{T-B:,.2f}<br>💸 <b>EMI (Per Member):</b> ₹{((T-B)/M)+F:,.2f}</div>", unsafe_allow_html=True)
+        
+        # --- WAITING LOUNGE (PRE-BIDDING) ---
+        else:
+            upcoming = db.reference('upcoming_settings').get() or {}
+            all_users = db.reference('users').get() or {}
+            target_m = upcoming.get('target_members', 10)
+            contrib = upcoming.get('contribution', 0)
+            joined_count = len(all_users)
+            
+            # Hall of Fame (Last Winner)
+            try:
+                hist = db.reference('history').get()
+                if hist:
+                    last_record = list(hist.values())[-1]
+                    st.markdown(f"<div class='winner-card'>👑 <b>Hall of Fame (Last Winner)</b><br>{last_record['highest_bidder']} won ₹{last_record['winner_received']:,.0f}</div>", unsafe_allow_html=True)
+            except: pass
+
+            st.markdown("### 🛋️ Waiting Lounge")
+            st.info("⏳ Bidding abhi shuru nahi hui hai. Kripya Admin ka intezar karein.")
+            
+            # Committee Overview
+            c1, c2 = st.columns(2)
+            c1.markdown(f"<div class='metric-card'>💸 <b>EMI/Month</b><br>₹{contrib}</div>", unsafe_allow_html=True)
+            c2.markdown(f"<div class='metric-card'>💰 <b>Est. Pool</b><br>₹{contrib * target_m}</div>", unsafe_allow_html=True)
+            
+            # Progress Bar for Slots
+            st.write(f"**Members Joined:** {joined_count} / {target_m}")
+            st.progress(min(joined_count / target_m, 1.0))
+            if joined_count < target_m:
+                st.warning(f"Need {target_m - joined_count} more members to fill the slots.")
+            else:
+                st.success("All slots filled! Ready to start.")
+            
+            # Masked Member List
+            st.divider()
+            st.markdown("#### 👥 Committee Members")
+            for mob, details in all_users.items():
+                masked_mob = f"{mob[:2]}XXXXXX{mob[-2:]}" if len(mob) >= 4 else "Hidden"
+                is_me = "(You)" if mob == st.session_state.mobile else ""
+                st.markdown(f"<div class='member-card'><div>👤 <b>{details.get('name')}</b> {is_me}</div><div style='color:gray;'>📱 {masked_mob}</div></div>", unsafe_allow_html=True)
 
 # ------------------- HISTORY PANEL -------------------
-elif page == "📜 History & Records":
-    st.header("📜 Committee History & Records")
-    st.write("Yahan aapki sabhi purani committees ka hisaab-kitaab save rahega.")
-    
+elif page == "📜 History":
+    st.header("📜 Records")
     try:
-        history_data = db.reference('history').get()
-        if history_data:
-            for key, record in reversed(list(history_data.items())):
-                date_str = record.get('date', 'Unknown Date')
-                winner_name = record.get('highest_bidder', 'Unknown')
-                
-                with st.expander(f"📅 Date: {date_str} | 🏆 Winner: {winner_name}"):
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.write(f"💰 **Total Pool:** ₹ {record.get('total_pool', 0):,.2f}")
-                        st.write(f"📉 **Final Bid (Discount):** ₹ {record.get('highest_bid', 0):,.2f}")
-                        st.write(f"💵 **Winner Received:** ₹ {record.get('winner_received', 0):,.2f}")
-                    with c2:
-                        st.write(f"💸 **EMI Per Member:** ₹ {record.get('emi', 0):,.2f}")
-                        st.write(f"🛠️ **Platform Fee Collected:** ₹ {record.get('admin_fee', 0):,.2f}")
+        hist = db.reference('history').get()
+        if hist:
+            for key, rec in reversed(list(hist.items())):
+                with st.expander(f"📅 {rec.get('date')} | 🏆 {rec.get('highest_bidder')}"):
+                    st.write(f"💰 Total Pool: ₹{rec.get('total_pool')}")
+                    st.write(f"📉 Final Bid: ₹{rec.get('highest_bid')}")
+                    st.write(f"💵 Winner Got: ₹{rec.get('winner_received')}")
+                    st.write(f"💸 EMI: ₹{rec.get('emi')}")
         else:
-            st.info("📭 Abhi tak koi purani committee ka record nahi hai.")
-    except Exception as e:
-        st.warning(f"History load karne mein error: {e}")
+            st.info("No records found.")
+    except: pass
