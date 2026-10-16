@@ -160,8 +160,31 @@ elif page == "👤 Member Panel (Live Bidding)":
                     st.rerun()
 
                 if status == "Active":
-                    mins, secs = divmod(remaining_seconds, 60)
-                    st.warning(f"⏳ **Time Remaining:** {mins:02d}:{secs:02d}")
+                   # --- NAYA LIVE TIMER CODE ---
+                    timer_html = f"""
+                    <div id="clock" style="background-color: #ffefc2; color: #856404; padding: 12px; border-radius: 8px; border: 1px solid #ffeeba; font-size: 18px; font-weight: bold; font-family: sans-serif; text-align: center; margin-bottom: 10px;">
+                        ⏳ Time Remaining: Calculating...
+                    </div>
+                    <script>
+                        var countDownDate = {{int(end_time * 1000)}};
+                        var x = setInterval(function() {{{{
+                            var now = new Date().getTime();
+                            var distance = countDownDate - now;
+                            if (distance <= 0) {{{{
+                                clearInterval(x);
+                                document.getElementById("clock").innerHTML = "⏳ Time is Up! Please click 'Refresh Timer & Bids' button below.";
+                                document.getElementById("clock").style.backgroundColor = "#f8d7da";
+                                document.getElementById("clock").style.color = "#721c24";
+                            }}}} else {{{{
+                                var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                                var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                                document.getElementById("clock").innerHTML = "⏳ Time Remaining: " + ("0" + minutes).slice(-2) + ":" + ("0" + seconds).slice(-2);
+                            }}}}
+                        }}}}, 1000);
+                    </script>
+                    """
+                    st.markdown(timer_html, unsafe_allow_html=True)
+                    # ----------------------------
                     
                     col1, col2, col3 = st.columns(3)
                     col1.metric("💰 Total Pool", f"₹ {committee_data['total_pool']}")
