@@ -2,24 +2,24 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
+import json
 
 st.set_page_config(page_title="Live Committee App", page_icon="💸", layout="wide")
 
 # ----------------- FIREBASE CONNECTION -----------------
-# Ensure Firebase is only initialized once
 if not firebase_admin._apps:
     try:
-        # JSON file ka naam jo aapne laptop mein save ki hai
-        cred = credentials.Certificate("firebase_key.json")
+        # Streamlit Secrets se secure key padhna
+        firebase_secrets = dict(st.secrets["firebase"])
+        cred = credentials.Certificate(firebase_secrets)
         
-        # YAHAN APNA DATABASE URL DALEIN (Firebase dashboard se copy karke)
+        # YAHAN APNA DATABASE URL DALEIN
         firebase_admin.initialize_app(cred, {
             'databaseURL': 'https://committee-app-88cab-default-rtdb.firebaseio.com/' 
         })
     except Exception as e:
         st.error(f"❌ Firebase Error: {e}")
 # -------------------------------------------------------
-
 st.title("💸 Live Committee & Bidding Platform")
 
 # Sidebar navigation
