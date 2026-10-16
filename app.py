@@ -42,7 +42,6 @@ if "invite" in query_params:
     
     st.title("🤝 Join Live Committee")
     
-    # Fetch upcoming details to show to the invitee
     try:
         upcoming = db.reference('upcoming_settings').get()
         contrib = upcoming.get('contribution', 0) if upcoming else 0
@@ -88,94 +87,104 @@ if 'mobile' not in st.session_state:
 
 st.title("💸 Live Committee")
 
-page = st.sidebar.radio("Menu", ["👤 Member Dashboard", "🛠️ Admin Panel", "📜 History"])
+# --- SECURE NAVIGATION: Admin option sirf tabhi dikhega jab zaroorat ho ---
+menu_options = ["👤 Member Dashboard", "📜 History"]
+
+# Sidebar mein ek chota sa secure check ya admin entry
+st.sidebar.divider()
+is_admin_trying = st.sidebar.checkbox("🛠️ Admin Login Mode")
+
+if is_admin_trying:
+    admin_pass_input = st.sidebar.text_input("Enter Admin Passcode", type="password")
+    if admin_pass_input == "admin123":
+        menu_options.append("🛠️ Admin Panel")
+        st.sidebar.success("✅ Admin Access Granted!")
+
+page = st.sidebar.radio("Menu", menu_options)
 
 # ------------------- ADMIN PANEL -------------------
 if page == "🛠️ Admin Panel":
-    admin_pass = st.sidebar.text_input("Admin Passcode", type="password")
+    st.header("🛠️ Admin Dashboard")
     
-    if admin_pass == "admin123":
-        tab1, tab2 = st.tabs(["👥 1. Pre-Setup & Invites", "🚀 2. Start Bidding"])
+    tab1, tab2 = st.tabs(["👥 1. Pre-Setup & Invites", "🚀 2. Start Bidding"])
+    
+    # TAB 1: SETUP & INVITES
+    with tab1:
+        st.subheader("Step 1: Set Target for Upcoming Committee")
+        with st.form("upcoming_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                target_m = st.number_input("Target Members", min_value=2, value=10)
+            with col2:
+                contrib = st.number_input("EMI/Contribution (₹)", min_value=1000, value=5000, step=500)
+            if st.form_submit_button("Save Target"):
+                db.reference('upcoming_settings').set({'target_members': target_m, 'contribution': contrib})
+                st.success("Target Saved! Now send invites.")
         
-        # TAB 1: SETUP & INVITES
-        with tab1:
-            st.subheader("Step 1: Set Target for Upcoming Committee")
-            with st.form("upcoming_form"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    target_m = st.number_input("Target Members", min_value=2, value=10)
-                with col2:
-                    contrib = st.number_input("EMI/Contribution (₹)", min_value=1000, value=5000, step=500)
-                if st.form_submit_button("Save Target"):
-                    db.reference('upcoming_settings').set({'target_members': target_m, 'contribution': contrib})
-                    st.success("Target Saved! Now send invites.")
+        st.divider()
+        st.subheader("Step 2: Invite Members")
+        invite_mob = st.text_input("Mobile Number (without +91)")
+        if st.button("Generate WhatsApp Invite"):
+            if invite_mob and len(invite_mob) == 10:
+                invite_link = f"{APP_URL}/?invite={invite_mob}"
+                msg_text = f"Hello! 🤝 Maine tumhe apni Live Committee mein add kiya hai.\n\n🔗 Is link par click karke details check karo aur Join karo:\n{invite_link}"
+                wa_link = f"https://wa.me/91{invite_mob}?text={urllib.parse.quote(msg_text)}"
+                st.markdown(f'<a href="{wa_link}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;font-weight:bold;">💬 Send Invite</a>', unsafe_allow_html=True)
+            else:
+                st.warning("Enter valid 10-digit number.")
+                
+    # TAB 2: START COMMITTEE
+    with tab2:
+        try:
+            current_data = db.reference('current_committee').get()
+            if current_data and current_data.get('status') == 'Completed':
+                if st.button("📁 Archive Old Committee"):
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    T = current_data['total_pool']
+                    B = current_data['highest_bid']
+                    M = current_data['total_members']
+                    F = current_data['app_fee']
+                    db.reference('history').push({
+                        'date': timestamp, 'total_pool': T, 'highest_bid': B,
+                        'highest_bidder': current_data['highest_bidder'],
+                        'emi': ((T - B) / M) + F, 'admin_fee': F * M, 'winner_received': T - B
+                    })
+                    db.reference('current_committee').delete()
+                    st.success("Archived! Ready for new bidding.")
+                    st.rerun()
+        except: pass
+
+        try:
+            all_users = db.reference('users').get() or {}
+            actual_member_count = len(all_users)
+            upcoming = db.reference('upcoming_settings').get() or {}
+            contrib = upcoming.get('contribution', 5000)
+        except:
+            actual_member_count = 0
+            contrib = 5000
             
-            st.divider()
-            st.subheader("Step 2: Invite Members")
-            invite_mob = st.text_input("Mobile Number (without +91)")
-            if st.button("Generate WhatsApp Invite"):
-                if invite_mob and len(invite_mob) == 10:
-                    invite_link = f"{APP_URL}/?invite={invite_mob}"
-                    msg_text = f"Hello! 🤝 Maine tumhe apni Live Committee mein add kiya hai.\n\n🔗 Is link par click karke details check karo aur Join karo:\n{invite_link}"
-                    wa_link = f"https://wa.me/91{invite_mob}?text={urllib.parse.quote(msg_text)}"
-                    st.markdown(f'<a href="{wa_link}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;font-weight:bold;">💬 Send Invite</a>', unsafe_allow_html=True)
+        st.info(f"👥 **Ready Members: {actual_member_count}** | 💸 **Contribution: ₹{contrib}**")
+
+        with st.form("setup_committee"):
+            c1, c2 = st.columns(2)
+            with c1:
+                min_bid = st.number_input("Minimum Bid (₹)", value=1000, step=500)
+            with c2:
+                app_fee = st.number_input("Platform Fee/Member (₹)", value=50)
+            timer_minutes = st.number_input("Timer (Minutes)", min_value=1, value=15)
+            
+            if st.form_submit_button("🚀 Start Live Bidding"):
+                if actual_member_count < 2:
+                    st.error("Need at least 2 members!")
                 else:
-                    st.warning("Enter valid 10-digit number.")
-                    
-        # TAB 2: START COMMITTEE
-        with tab2:
-            try:
-                current_data = db.reference('current_committee').get()
-                if current_data and current_data.get('status') == 'Completed':
-                    if st.button("📁 Archive Old Committee"):
-                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        T = current_data['total_pool']
-                        B = current_data['highest_bid']
-                        M = current_data['total_members']
-                        F = current_data['app_fee']
-                        db.reference('history').push({
-                            'date': timestamp, 'total_pool': T, 'highest_bid': B,
-                            'highest_bidder': current_data['highest_bidder'],
-                            'emi': ((T - B) / M) + F, 'admin_fee': F * M, 'winner_received': T - B
-                        })
-                        db.reference('current_committee').delete()
-                        st.success("Archived! Ready for new bidding.")
-                        st.rerun()
-            except: pass
-
-            try:
-                all_users = db.reference('users').get() or {}
-                actual_member_count = len(all_users)
-                upcoming = db.reference('upcoming_settings').get() or {}
-                contrib = upcoming.get('contribution', 5000)
-            except:
-                actual_member_count = 0
-                contrib = 5000
-                
-            st.info(f"👥 **Ready Members: {actual_member_count}** | 💸 **Contribution: ₹{contrib}**")
-
-            with st.form("setup_committee"):
-                c1, c2 = st.columns(2)
-                with c1:
-                    min_bid = st.number_input("Minimum Bid (₹)", value=1000, step=500)
-                with c2:
-                    app_fee = st.number_input("Platform Fee/Member (₹)", value=50)
-                timer_minutes = st.number_input("Timer (Minutes)", min_value=1, value=15)
-                
-                if st.form_submit_button("🚀 Start Live Bidding"):
-                    if actual_member_count < 2:
-                        st.error("Need at least 2 members!")
-                    else:
-                        db.reference('current_committee').set({
-                            'total_pool': contrib * actual_member_count,
-                            'total_members': actual_member_count,
-                            'min_bid': min_bid, 'app_fee': app_fee,
-                            'highest_bid': 0, 'highest_bidder': "No one yet",
-                            'status': "Active", 'end_time': time.time() + (timer_minutes * 60)
-                        })
-                        st.success("Bidding Started!")
-    else:
-        st.warning("Enter Admin Passcode")
+                    db.reference('current_committee').set({
+                        'total_pool': contrib * actual_member_count,
+                        'total_members': actual_member_count,
+                        'min_bid': min_bid, 'app_fee': app_fee,
+                        'highest_bid': 0, 'highest_bidder': "No one yet",
+                        'status': "Active", 'end_time': time.time() + (timer_minutes * 60)
+                    })
+                    st.success("Bidding Started!")
 
 # ------------------- MEMBER PANEL -------------------
 elif page == "👤 Member Dashboard":
@@ -249,7 +258,6 @@ elif page == "👤 Member Dashboard":
                     if actual_time < end_time:
                         remaining_time = end_time - actual_time
                         
-                        # Fix: Sirf tabhi 60 seconds jodein jab time 1 minute se kam bacha ho
                         if remaining_time <= 60:
                             new_end_time = end_time + 60
                             success_msg = "Bid Placed! Time Extended by 1 minute."
@@ -279,7 +287,6 @@ elif page == "👤 Member Dashboard":
             contrib = upcoming.get('contribution', 0)
             joined_count = len(all_users)
             
-            # Hall of Fame (Last Winner)
             try:
                 hist = db.reference('history').get()
                 if hist:
@@ -290,12 +297,10 @@ elif page == "👤 Member Dashboard":
             st.markdown("### 🛋️ Waiting Lounge")
             st.info("⏳ Bidding abhi shuru nahi hui hai. Kripya Admin ka intezar karein.")
             
-            # Committee Overview
             c1, c2 = st.columns(2)
             c1.markdown(f"<div class='metric-card'>💸 <b>EMI/Month</b><br>₹{contrib}</div>", unsafe_allow_html=True)
             c2.markdown(f"<div class='metric-card'>💰 <b>Est. Pool</b><br>₹{contrib * target_m}</div>", unsafe_allow_html=True)
             
-            # Progress Bar for Slots
             st.write(f"**Members Joined:** {joined_count} / {target_m}")
             st.progress(min(joined_count / target_m, 1.0))
             if joined_count < target_m:
@@ -303,7 +308,6 @@ elif page == "👤 Member Dashboard":
             else:
                 st.success("All slots filled! Ready to start.")
             
-            # Masked Member List
             st.divider()
             st.markdown("#### 👥 Committee Members")
             for mob, details in all_users.items():
