@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
@@ -183,7 +184,7 @@ elif page == "👤 Member Panel (Live Bidding)":
                         }}}}, 1000);
                     </script>
                     """
-                    st.markdown(timer_html, unsafe_allow_html=True)
+                   components.html(timer_html, height=65)
                     # ----------------------------
                     
                     col1, col2, col3 = st.columns(3)
