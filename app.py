@@ -184,7 +184,7 @@ elif page == "👤 Member Panel (Live Bidding)":
                         }}}}, 1000);
                     </script>
                     """
-                   components.html(timer_html, height=65)
+                    components.html(timer_html, height=65)
                     # ----------------------------
                     
                     col1, col2, col3 = st.columns(3)
