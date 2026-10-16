@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
 import time
+from datetime import datetime
 
 st.set_page_config(page_title="Live Committee App", page_icon="💸", layout="wide")
 
@@ -29,22 +30,52 @@ if 'mobile' not in st.session_state:
 
 st.title("💸 Live Committee & Bidding Platform")
 
-# Sidebar navigation
-page = st.sidebar.radio("Navigation", ["👤 Member Panel (Live Bidding)", "🛠️ Admin Panel"])
+# Sidebar navigation - NAYA HISTORY PAGE ADD KIYA HAI
+page = st.sidebar.radio("Navigation", ["👤 Member Panel (Live Bidding)", "🛠️ Admin Panel", "📜 History & Records"])
 
 # ------------------- ADMIN PANEL -------------------
 if page == "🛠️ Admin Panel":
-    # Optional: Basic Admin Password to prevent members from opening this page
     admin_pass = st.sidebar.text_input("Admin Passcode", type="password")
     
-    if admin_pass == "admin123": # Aap is password ko badal sakte hain
+    if admin_pass == "admin123":
         st.header("🛠️ Admin Dashboard")
         
-        # Tabs for Admin
-        tab1, tab2 = st.tabs(["🚀 Start Committee", "👥 Add/Manage Members"])
+        tab1, tab2 = st.tabs(["🚀 Start & Manage Committee", "👥 Add/Manage Members"])
         
-        # TAB 1: START COMMITTEE
+        # TAB 1: START OR ARCHIVE COMMITTEE
         with tab1:
+            try:
+                current_data = db.reference('current_committee').get()
+                # Agar committee complete ho chuki hai, toh Archive ka button dikhayen
+                if current_data and current_data.get('status') == 'Completed':
+                    st.success("🎉 Pichli Committee safaltapurvak poori ho chuki hai!")
+                    st.warning("⚠️ Nayi committee shuru karne se pehle purani ko History mein save karein.")
+                    
+                    if st.button("📁 Archive & Reset Committee"):
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        T = current_data['total_pool']
+                        B = current_data['highest_bid']
+                        M = current_data['total_members']
+                        F = current_data['app_fee']
+                        
+                        # History mein data push karein
+                        db.reference('history').push({
+                            'date': timestamp,
+                            'total_pool': T,
+                            'highest_bid': B,
+                            'highest_bidder': current_data['highest_bidder'],
+                            'emi': ((T - B) / M) + F,
+                            'admin_fee': F * M,
+                            'winner_received': T - B
+                        })
+                        # Current committee ko delete kar dein taki nayi shuru ho sake
+                        db.reference('current_committee').delete()
+                        st.success("✅ Committee Archived! Ab aap nayi boli shuru kar sakte hain.")
+                        st.rerun()
+            except Exception as e:
+                pass
+
+            st.divider()
             st.subheader("Setup New Committee")
             with st.form("setup_committee"):
                 col1, col2 = st.columns(2)
@@ -72,11 +103,9 @@ if page == "🛠️ Admin Panel":
                     })
                     st.success(f"✅ Committee Started for {timer_minutes} minutes!")
 
-       # TAB 2: MANAGE MEMBERS
+        # TAB 2: MANAGE MEMBERS
         with tab2:
             st.subheader("Register New Member")
-            
-            # (clear_on_submit=True) lagane se save karte hi box khali ho jayenge
             with st.form("add_user_form", clear_on_submit=True):
                 new_name = st.text_input("Member Name")
                 new_mobile = st.text_input("Mobile Number (This is their Login ID)")
@@ -94,8 +123,6 @@ if page == "🛠️ Admin Panel":
                         st.error("Kripya sabhi details bharein.")
             
             st.divider()
-            
-            # Niche sabhi add kiye hue members ki list dikhegi
             st.subheader("📋 Registered Members")
             try:
                 all_users = db.reference('users').get()
@@ -106,13 +133,11 @@ if page == "🛠️ Admin Panel":
                     st.info("Abhi tak koi member add nahi hua hai.")
             except Exception:
                 pass
-
     else:
         st.warning("🔒 Kripya Admin Panel access karne ke liye sahi Admin Passcode dalein. (Default: admin123)")
+
 # ------------------- MEMBER PANEL -------------------
 elif page == "👤 Member Panel (Live Bidding)":
-    
-    # IF NOT LOGGED IN -> SHOW LOGIN SCREEN
     if not st.session_state.logged_in:
         st.header("🔐 Member Login")
         mobile_input = st.text_input("Mobile Number")
@@ -121,7 +146,6 @@ elif page == "👤 Member Panel (Live Bidding)":
         if st.button("Login"):
             if mobile_input and pass_input:
                 user_data = db.reference(f'users/{mobile_input}').get()
-                
                 if user_data and user_data.get('password') == pass_input:
                     st.session_state.logged_in = True
                     st.session_state.user_name = user_data.get('name')
@@ -132,8 +156,6 @@ elif page == "👤 Member Panel (Live Bidding)":
                     st.error("❌ Galat Mobile Number ya Password.")
             else:
                 st.warning("Kripya Mobile aur Password dalein.")
-                
-    # IF LOGGED IN -> SHOW BIDDING ROOM
     else:
         colA, colB = st.columns([4, 1])
         with colA:
@@ -146,7 +168,6 @@ elif page == "👤 Member Panel (Live Bidding)":
                 st.rerun()
                 
         st.divider()
-        
         try:
             committee_data = db.reference('current_committee').get()
             
@@ -161,7 +182,6 @@ elif page == "👤 Member Panel (Live Bidding)":
                     st.rerun()
 
                 if status == "Active":
-                   # --- NAYA LIVE TIMER CODE ---
                     timer_html = f"""
                     <div id="clock" style="background-color: #ffefc2; color: #856404; padding: 12px; border-radius: 8px; border: 1px solid #ffeeba; font-size: 18px; font-weight: bold; font-family: sans-serif; text-align: center; margin-bottom: 10px;">
                         ⏳ Time Remaining: Calculating...
@@ -183,9 +203,8 @@ elif page == "👤 Member Panel (Live Bidding)":
                             }}
                         }}, 1000);
                     </script>
-                    """                    
+                    """
                     components.html(timer_html, height=65)
-                    # ----------------------------
                     
                     col1, col2, col3 = st.columns(3)
                     col1.metric("💰 Total Pool", f"₹ {committee_data['total_pool']}")
@@ -193,7 +212,6 @@ elif page == "👤 Member Panel (Live Bidding)":
                     col3.metric("👑 Highest Bidder", committee_data['highest_bidder'])
                     
                     st.divider()
-                    
                     st.subheader("Place Your Bid")
                     
                     next_min_bid = committee_data['highest_bid'] + 500
@@ -213,7 +231,7 @@ elif page == "👤 Member Panel (Live Bidding)":
                                 
                             db.reference('current_committee').update({
                                 'highest_bid': new_bid,
-                                'highest_bidder': st.session_state.user_name, # Ab naam automatic jayega
+                                'highest_bidder': st.session_state.user_name,
                                 'end_time': new_end_time
                             })
                             st.success("✅ Bid placed successfully!")
@@ -224,26 +242,47 @@ elif page == "👤 Member Panel (Live Bidding)":
                         
                 elif status == "Completed":
                     st.success("🎉 **Bidding has Ended!** 🎉")
-                    
                     T = committee_data['total_pool']
                     B = committee_data['highest_bid']
                     M = committee_data['total_members']
                     F = committee_data['app_fee']
                     Winner = committee_data['highest_bidder']
                     
-                    winner_amount = T - B
-                    emi_per_member = ((T - B) / M) + F
-                    
                     col1, col2 = st.columns(2)
                     with col1:
                         st.info(f"🏆 **Winner:** {Winner}")
-                        st.info(f"💵 **Winner Receives:** ₹ {winner_amount:,.2f}")
-                        
+                        st.info(f"💵 **Winner Receives:** ₹ {T - B:,.2f}")
                     with col2:
-                        st.error(f"💸 **EMI (Per Member):** ₹ {emi_per_member:,.2f}")
+                        st.error(f"💸 **EMI (Per Member):** ₹ {((T - B) / M) + F:,.2f}")
                         st.warning(f"🛠️ **Admin/Platform Fee Collected:** ₹ {F * M:,.2f}")
             else:
                 st.info("⏳ Abhi koi Committee chalu nahi hai. Kripya Admin ka intezar karein.")
-                
         except Exception as e:
             st.warning(f"Database Error: {e}")
+
+# ------------------- HISTORY PANEL -------------------
+elif page == "📜 History & Records":
+    st.header("📜 Committee History & Records")
+    st.write("Yahan aapki sabhi purani committees ka hisaab-kitaab save rahega.")
+    
+    try:
+        history_data = db.reference('history').get()
+        if history_data:
+            # Data ko ulta (reverse) kar rahe hain taaki latest wali upar dikhe
+            for key, record in reversed(list(history_data.items())):
+                date_str = record.get('date', 'Unknown Date')
+                winner_name = record.get('highest_bidder', 'Unknown')
+                
+                with st.expander(f"📅 Date: {date_str} | 🏆 Winner: {winner_name}"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.write(f"💰 **Total Pool:** ₹ {record.get('total_pool', 0):,.2f}")
+                        st.write(f"📉 **Final Bid (Discount):** ₹ {record.get('highest_bid', 0):,.2f}")
+                        st.write(f"💵 **Winner Received:** ₹ {record.get('winner_received', 0):,.2f}")
+                    with c2:
+                        st.write(f"💸 **EMI Per Member:** ₹ {record.get('emi', 0):,.2f}")
+                        st.write(f"🛠️ **Platform Fee Collected:** ₹ {record.get('admin_fee', 0):,.2f}")
+        else:
+            st.info("📭 Abhi tak koi purani committee ka record nahi hai.")
+    except Exception as e:
+        st.warning(f"History load karne mein error: {e}")
