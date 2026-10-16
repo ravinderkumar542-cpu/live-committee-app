@@ -71,10 +71,12 @@ if page == "🛠️ Admin Panel":
                     })
                     st.success(f"✅ Committee Started for {timer_minutes} minutes!")
 
-        # TAB 2: MANAGE MEMBERS
+       # TAB 2: MANAGE MEMBERS
         with tab2:
             st.subheader("Register New Member")
-            with st.form("add_user_form"):
+            
+            # (clear_on_submit=True) lagane se save karte hi box khali ho jayenge
+            with st.form("add_user_form", clear_on_submit=True):
                 new_name = st.text_input("Member Name")
                 new_mobile = st.text_input("Mobile Number (This is their Login ID)")
                 new_pass = st.text_input("Assign a Password")
@@ -89,9 +91,23 @@ if page == "🛠️ Admin Panel":
                         st.success(f"✅ {new_name} added successfully! Mobile: {new_mobile}")
                     else:
                         st.error("Kripya sabhi details bharein.")
+            
+            st.divider()
+            
+            # Niche sabhi add kiye hue members ki list dikhegi
+            st.subheader("📋 Registered Members")
+            try:
+                all_users = db.reference('users').get()
+                if all_users:
+                    for mob, details in all_users.items():
+                        st.write(f"👤 **{details.get('name', 'Unknown')}** (Login ID: {mob})")
+                else:
+                    st.info("Abhi tak koi member add nahi hua hai.")
+            except Exception:
+                pass
+
     else:
         st.warning("🔒 Kripya Admin Panel access karne ke liye sahi Admin Passcode dalein. (Default: admin123)")
-
 # ------------------- MEMBER PANEL -------------------
 elif page == "👤 Member Panel (Live Bidding)":
     
