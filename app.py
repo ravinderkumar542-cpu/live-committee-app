@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 
-# 1. Page Configuration (Must be the first Streamlit command)
+# 1. Page Configuration & Custom CSS (ऐप जैसा लुक देने के लिए)
 st.set_page_config(page_title="Live Committee", page_icon="💸", layout="centered")
 
-# 2. Custom CSS to hide Web UI and make it look like a Native App
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -22,76 +20,124 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 3. App Title
-st.title("💸 Live Committee")
+# 2. Database & State Management (पूरा काम करने वाला सिस्टम)
+if 'users_db' not in st.session_state:
+    # डिफ़ॉल्ट यूज़र्स (आप इन्हें बाद में अपने हिसाब से बदल सकते हैं)
+    st.session_state['users_db'] = {
+        "9876543210": {"name": "Admin", "role": "admin"},
+        "9999999999": {"name": "Ravinder Kumar", "role": "user"},
+        "8888888888": {"name": "Gopal Dhiman", "role": "user"}
+    }
 
-# 4. Dummy Data for UI (इसे बाद में आप अपने असली डेटा से जोड़ सकते हैं)
-members = ["Ravinder Kumar", "Gopal Dhiman", "Ankit Kumar", "Sachin"]
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+    st.session_state['current_user_name'] = ""
+    st.session_state['current_role'] = ""
+    st.session_state['current_mobile'] = ""
 
-# 5. Sidebar - For simulating User Login
-st.sidebar.title("🔐 Login / मेम्बर चुनें")
-current_user = st.sidebar.selectbox("आप कौन हैं?", members)
+# ----------------- LOGIN PAGE -----------------
+def login_page():
+    st.title("🔐 Live Committee Login")
+    st.write("अपना रजिस्टर्ड मोबाइल नंबर दर्ज करें:")
+    
+    mobile = st.text_input("📱 मोबाइल नंबर (10 अंक):", max_chars=10)
+    
+    if st.button("लॉग इन 🚀"):
+        if mobile in st.session_state['users_db']:
+            user_data = st.session_state['users_db'][mobile]
+            st.session_state['logged_in'] = True
+            st.session_state['current_user_name'] = user_data['name']
+            st.session_state['current_role'] = user_data['role']
+            st.session_state['current_mobile'] = mobile
+            st.rerun()
+        else:
+            if len(mobile) == 10:
+                st.error("❌ यह नंबर रजिस्टर्ड नहीं है। कृपया एडमिन से संपर्क करें।")
+            else:
+                st.warning("⚠️ कृपया 10 अंकों का सही मोबाइल नंबर डालें।")
 
-# ----------------- DASHBOARD -----------------
+# ----------------- ADMIN PANEL -----------------
+def admin_page():
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.title("⚙️ Admin Panel")
+    with col2:
+        if st.button("Logout 🚪"):
+            st.session_state['logged_in'] = False
+            st.rerun()
+            
+    st.markdown("### ➕ नए मेम्बर को जोड़ें (Invite)")
+    with st.form("add_user_form", clear_on_submit=True):
+        new_name = st.text_input("मेम्बर का नाम:")
+        new_mobile = st.text_input("मोबाइल नंबर (10 अंक):", max_chars=10)
+        
+        if st.form_submit_button("✅ मेम्बर ऐड करें"):
+            if len(new_mobile) == 10 and new_name:
+                st.session_state['users_db'][new_mobile] = {"name": new_name, "role": "user"}
+                st.success(f"🎉 {new_name} ({new_mobile}) को सफलता से जोड़ दिया गया है! अब वे लॉगिन कर सकते हैं।")
+            else:
+                st.error("कृपया सही नाम और 10 अंकों का नंबर डालें।")
+                
+    st.markdown("---")
+    st.subheader("👥 सभी रजिस्टर्ड मेम्बर्स")
+    for mob, data in st.session_state['users_db'].items():
+        if data['role'] != 'admin':
+            st.write(f"- **{data['name']}** (📱 {mob})")
 
-# 6. Welcome Message
-st.markdown(f"### 👋 नमस्ते, {current_user}!")
-st.write("आपकी **Live Committee** का ताज़ा अपडेट यहाँ है:")
+# ----------------- USER DASHBOARD (अट्रैक्टिव डिज़ाइन) -----------------
+def dashboard_page():
+    name = st.session_state['current_user_name']
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.title("💸 Live Committee")
+    with col2:
+        if st.button("Logout 🚪"):
+            st.session_state['logged_in'] = False
+            st.rerun()
 
-st.markdown("---")
+    st.markdown(f"### 👋 नमस्ते, {name}!")
+    st.write("आपकी कमेटी का ताज़ा अपडेट यहाँ है:")
+    st.markdown("---")
 
-# 7. Attractive Metrics (3 Box Layout)
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric(label="🟢 कुल जमा (Paid)", value="₹ 44,000")
-with col2:
-    st.metric(label="🔴 बकाया (Due)", value="₹ 3,192")
-with col3:
-    st.metric(label="🏆 पिछले विजेता", value="Gopal")
+    # 3 Color Box Layout
+    c1, c2, c3 = st.columns(3)
+    c1.metric("🟢 कुल जमा", "₹ 44,000")
+    c2.metric("🔴 बकाया", "₹ 3,192")
+    c3.metric("🏆 विजेता", "Gopal")
 
-st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-# 8. Action Area (Alerts based on payment status)
-# Demo Logic: If user is Ravinder, show Due alert, else show Paid alert
-if current_user == "Ravinder Kumar":
-    st.warning("⏳ **ध्यान दें:** आपकी इस महीने की किश्त (₹ 3,192) पेंडिंग है। कृपया समय पर जमा करें।")
+    # Attractive Alert Logic
+    if name == "Ravinder Kumar":
+        st.warning("⏳ **ध्यान दें:** आपकी इस महीने की किश्त (₹ 3,192) पेंडिंग है। कृपया समय पर जमा करें।")
+    else:
+        st.success("🎉 शानदार! आपकी इस महीने की किश्त जमा हो चुकी है।")
+
+    st.info("⏳ **अगली कमेटी:** अगली बोली खुलने में **8 दिन** बाकी हैं! तैयार रहें।")
+    st.markdown("---")
+
+    # Transaction History (Expanders)
+    st.subheader("📜 आपकी ट्रांज़ैक्शन हिस्ट्री")
+    with st.expander("✅ October 2026 - सफलतापूर्वक जमा"):
+        st.write("**तारीख:** 15 Oct 2026 | **रकम:** ₹ 3,192 | **स्टेटस:** 🟢 Paid")
+    with st.expander("⏳ November 2026 - पेंडिंग"):
+        st.write("**तारीख:** 15 Nov 2026 | **रकम:** ₹ 3,192 | **स्टेटस:** 🔴 Pending")
+        
+    st.markdown("---")
+    
+    # Engagement Section
+    st.subheader("🌟 Star Members (इस महीने)")
+    st.caption("इन सदस्यों ने सबसे पहले किश्त जमा की है:")
+    st.markdown("🥇 ✅ **Gopal Dhiman**")
+    st.markdown("🥈 ✅ **Ankit Kumar**")
+    st.markdown("🥉 ✅ **Sachin**")
+
+# ----------------- MAIN APP ROUTING -----------------
+if not st.session_state['logged_in']:
+    login_page()
 else:
-    st.success("🎉 शानदार! आपकी इस महीने की किश्त सफलता से जमा हो चुकी है।")
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# 9. Next Bidding Countdown (Engagement Feature)
-st.info("⏳ **अगली कमेटी:** अगली बोली (Bidding) खुलने में **8 दिन** बाकी हैं! तैयार रहें।")
-
-st.markdown("---")
-
-# ----------------- TRANSACTION HISTORY -----------------
-st.subheader("📜 आपकी ट्रांज़ैक्शन हिस्ट्री")
-
-# Using Expanders for clean UI
-with st.expander("✅ October 2026 - सफलतापूर्वक जमा"):
-    st.markdown("**तारीख:** 15 Oct 2026")
-    st.markdown("**रकम:** ₹ 3,192")
-    st.markdown("**स्टेटस:** 🟢 Paid")
-    st.markdown("**रिसीट:** कमेटी संचालक द्वारा वेरिफाइड")
-
-with st.expander("⏳ November 2026 - पेंडिंग (बकाया)"):
-    st.markdown("**तारीख:** 15 Nov 2026")
-    st.markdown("**रकम:** ₹ 3,192")
-    st.markdown("**स्टेटस:** 🔴 Pending")
-    st.button("Pay Now (एडमिन से संपर्क करें)")
-
-st.markdown("---")
-
-# ----------------- STAR MEMBERS -----------------
-st.subheader("🌟 Star Members (इस महीने)")
-st.caption("इन सदस्यों ने इस महीने सबसे पहले किश्त जमा की है। बहुत बढ़िया!")
-
-# List of star members
-st.markdown("🥇 ✅ **Gopal Dhiman**")
-st.markdown("🥈 ✅ **Ankit Kumar**")
-st.markdown("🥉 ✅ **Sachin**")
-
-# Footer motivation
-st.markdown("<br>", unsafe_allow_html=True)
-st.caption("Live Committee App v1.0 | सुरक्षित और पारदर्शी")
+    if st.session_state['current_role'] == 'admin':
+        admin_page()
+    else:
+        dashboard_page()
